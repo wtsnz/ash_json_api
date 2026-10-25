@@ -103,7 +103,7 @@ defmodule AshJsonApi.Controllers.Helpers do
           else
             base_query
           end
-          |> Ash.Query.sort(request.sort)
+          |> Ash.Query.sort_input(request.sort)
           |> Ash.Query.load(fields(request, request.resource))
           |> Ash.Query.for_read(request.action.name, request.arguments, Request.opts(request))
 
@@ -905,15 +905,23 @@ defmodule AshJsonApi.Controllers.Helpers do
         request.relationship
       )
 
-    sort = request.sort || default_sort(request.resource)
-
     read_opts = Request.opts(request)
 
+    # The filter and sort come from the request, so they're client input. The default sort is
+    # trusted.
     destination_query =
       relationship.destination
       |> Ash.Query.new()
-      |> Ash.Query.filter(^request.filter)
-      |> Ash.Query.sort(sort)
+      |> Ash.Query.filter_input(request.filter,
+        ref_transformer: AshJsonApi.Resource.Info.filter_ref_transformer()
+      )
+      |> then(fn query ->
+        if request.sort do
+          Ash.Query.sort_input(query, request.sort)
+        else
+          Ash.Query.sort(query, default_sort(request.resource))
+        end
+      end)
       |> Ash.Query.load(request.includes_keyword)
       |> Ash.Query.load(fields(request, request.resource))
       |> Ash.Query.set_context(request.context)
